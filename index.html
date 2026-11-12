@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tlou Family Tree</title>
+<style>
+  :root{
+    --bg:#faf7f2; --ink:#2b2622; --muted:#7a716a; --line:#b9ada2;
+    --f:#fbe3ee; --f-b:#d98bab; --m:#e1e6fb; --m-b:#8796d6; --u:#ffffff; --u-b:#b9ada2;
+    --accent:#a0522d; --hl:#f4b942; --panel:#ffffff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+  header{padding:14px 20px 8px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;border-bottom:1px solid #e8e0d6;background:#fff}
+  header h1{margin:0;font-size:1.5rem;letter-spacing:.3px}
+  header h1 small{display:block;font-size:.75rem;font-weight:400;color:var(--muted)}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
+  .toolbar input{padding:7px 10px;border:1px solid #d6ccc1;border-radius:8px;min-width:200px;font:inherit}
+  button{font:inherit;cursor:pointer;border:1px solid #d6ccc1;background:#fff;border-radius:8px;padding:6px 10px;color:var(--ink)}
+  button:hover{background:#f3ede6}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .legend{display:flex;gap:12px;font-size:.8rem;color:var(--muted);align-items:center;padding:6px 20px;background:#fff;border-bottom:1px solid #e8e0d6;flex-wrap:wrap}
+  .sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:4px;border:1px solid}
+  .main{display:flex;height:calc(100% - 112px);min-height:400px}
+  #viewport{flex:1;overflow:hidden;position:relative;cursor:grab;touch-action:none}
+  #viewport.drag{cursor:grabbing}
+  #canvas{position:absolute;left:0;top:0;transform-origin:0 0;padding:30px}
+  #results{position:absolute;z-index:20;background:#fff;border:1px solid #d6ccc1;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:300px;overflow:auto;display:none;min-width:260px}
+  #results div{padding:7px 12px;cursor:pointer;font-size:.9rem}
+  #results div:hover,#results div.act{background:#f3ede6}
+  #results small{color:var(--muted)}
+
+  /* ---- tree ---- */
+  .tree ul{display:flex;justify-content:center;padding:22px 0 0;margin:0;position:relative;list-style:none}
+  .tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:22px 6px 0}
+  .tree li::before,.tree li::after{content:"";position:absolute;top:0;right:50%;width:50%;height:22px;border-top:1.5px solid var(--line)}
+  .tree li::after{right:auto;left:50%;border-left:1.5px solid var(--line)}
+  .tree li:only-child::before,.tree li:only-child::after{border-top:none}
+  .tree li:only-child::after{left:50%}
+  .tree li:first-child::before,.tree li:last-child::after{border:0 none}
+  .tree li:last-child::before{border-right:1.5px solid var(--line);border-radius:0 6px 0 0}
+  .tree li:first-child::after{border-radius:6px 0 0 0}
+  .tree ul ul::before{content:"";position:absolute;top:0;left:50%;height:22px;border-left:1.5px solid var(--line)}
+  .tree > ul{padding-top:0}
+  .tree > ul > li{padding-top:0}
+  .tree > ul > li::before,.tree > ul > li::after{display:none}
+  .couple{display:flex;gap:0;align-items:center;position:relative}
+  .couple .link{width:10px;height:2px;background:var(--ink)}
+  .p{width:104px;min-height:54px;padding:6px 6px;border-radius:9px;border:1.5px solid;display:flex;align-items:center;justify-content:center;text-align:center;font-size:.8rem;line-height:1.15;cursor:pointer;transition:transform .12s, box-shadow .12s;user-select:none;position:relative;background:var(--u);border-color:var(--u-b)}
+  .p:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.12)}
+  .p.f{background:var(--f);border-color:var(--f-b)}
+  .p.m{background:var(--m);border-color:var(--m-b)}
+  .p.late{color:#8d847c}
+  .p.late::after{content:"✝";position:absolute;top:2px;right:5px;font-size:.65rem;color:#a59c94}
+  .p.sel{outline:3px solid var(--accent);outline-offset:2px}
+  .p.path{box-shadow:0 0 0 3px var(--hl)}
+  .p.hit{animation:pulse 1.2s ease 2}
+  @keyframes pulse{50%{box-shadow:0 0 0 7px rgba(244,185,66,.6)}}
+  .tog{position:absolute;bottom:-11px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;padding:0;font-size:.75rem;line-height:17px;z-index:2;background:#fff}
+  li.collapsed > ul{display:none}
+  .count{font-size:.65rem;color:var(--muted);margin-top:13px}
+
+  /* ---- side panel ---- */
+  aside{width:340px;background:var(--panel);border-left:1px solid #e8e0d6;overflow:auto;padding:18px 18px 30px}
+  aside h2{margin:.1em 0 .1em;font-size:1.3rem}
+  aside .sub{color:var(--muted);font-size:.85rem;margin-bottom:12px}
+  aside h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:16px 0 6px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:.82rem;padding:5px 9px;border-radius:999px;border:1px solid;cursor:pointer;background:var(--u);border-color:var(--u-b)}
+  .chip.f{background:var(--f);border-color:var(--f-b)} .chip.m{background:var(--m);border-color:var(--m-b)}
+  .chip.late{color:#8d847c}
+  .chip:hover{filter:brightness(.96)}
+  .none{font-size:.85rem;color:var(--muted)}
+  .nav{display:flex;gap:6px;margin-bottom:10px}
+  .crumbs{font-size:.75rem;color:var(--muted);margin:6px 0 4px;line-height:1.6}
+  .crumbs a{color:var(--accent);cursor:pointer;text-decoration:underline}
+  .rel{background:#fbf6ef;border:1px solid #eadfce;border-radius:10px;padding:12px;margin-top:16px}
+  .rel select{width:100%;padding:7px;border-radius:8px;border:1px solid #d6ccc1;font:inherit;margin:6px 0}
+  .answer{font-size:.95rem;margin-top:8px;line-height:1.4}
+  .answer b{color:var(--accent)}
+  .lineage{font-size:.82rem;line-height:1.7}
+  .lineage a{color:var(--accent);cursor:pointer}
+  .welcome p{font-size:.9rem;line-height:1.5;color:#4d453f}
+  @media (max-width: 800px){
+    header{padding:10px 12px 6px}
+    header h1{font-size:1.2rem}
+    .toolbar{margin-left:0;width:100%;gap:6px}
+    .toolbar input{flex:1 1 100%;min-width:0}
+    .toolbar button{padding:5px 8px;font-size:.85rem}
+    .legend{padding:4px 12px;font-size:.72rem;gap:8px}
+    .legend .hint{display:none}
+    .main{height:auto}
+    #viewport{height:calc(100vh - 150px);flex:1}
+    aside{position:fixed;left:0;right:0;bottom:0;width:auto;max-height:46vh;border-left:0;border-top:1px solid #e8e0d6;
+      border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.15);z-index:30;padding:10px 16px 24px}
+    aside::before{content:"";display:block;width:40px;height:4px;border-radius:4px;background:#d6ccc1;margin:0 auto 8px}
+    aside.min{max-height:120px;overflow:hidden}
+  }
+  @media print{header .toolbar,aside,.legend,.tog{display:none!important}#viewport{overflow:visible}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tlou Family Tree<small>Seven generations, from Tsele &amp; Rantsu Tlou · chart dated 13 Nov 2022</small></h1>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Search a name…" autocomplete="off">
+    <button id="zin" title="Zoom in">＋</button>
+    <button id="zout" title="Zoom out">－</button>
+    <button id="fit" title="Fit the whole tree">Fit</button>
+    <button id="expand">Expand all</button>
+    <button id="collapse">Collapse all</button>
+  </div>
+</header>
+<div class="legend">
+  <span><i class="sw" style="background:var(--f);border-color:var(--f-b)"></i>Female</span>
+  <span><i class="sw" style="background:var(--m);border-color:var(--m-b)"></i>Male</span>
+  <span><i class="sw" style="background:#fff;border-color:var(--u-b)"></i>Not recorded</span>
+  <span>✝ Late (greyed on original chart)</span>
+  <span class="hint">Drag to move · scroll or pinch to zoom · click any person to explore</span>
+</div>
+<div class="main">
+  <div id="viewport"><div id="canvas" class="tree"></div><div id="results"></div></div>
+  <aside id="panel"></aside>
+</div>
+
+<script>
+window.FAMILY = {
+  name: "Tsele Tlou", g: "f", late: true,
+  spouse: { name: "Rantsu Tlou", g: "m", late: true },
+  children: [
+    { name: "Stephans Tlou", g: "m", late: true },
+    { name: "Ngude Tlou", g: "m", late: true,
+      spouse: { name: "S'phiwe Tlou", g: "f", late: true },
+      children: [
+        { name: "Radiphororo Tlou", g: "m", late: true,
+          spouse: { name: "Nobuteku Tlou", g: "f", late: true },
+          children: [
+            { name: "Madimabe Tlou", g: "m", late: true,
+              spouse: { name: "Mateke Tlou", g: "f", late: true },
+              children: [
+                { name: "Phillip Tlou", g: "m",
+                  spouse: { name: "Vinnia Tlou", g: "f" },
+                  children: [
+                    { name: "Reabetswe Tlou", g: "f" },
+                    { name: "Thabang Tlou", g: "m" } ] },
+                { name: "Qoli Tlou", g: "f", late: true,
+                  children: [
+                    { name: "Mmathapelo Tlou", g: "f", late: true,
+                      children: [
+                        { name: "Snethemba Tlou", g: "f" },
+                        { name: "Junior Tlou", g: "m" } ] },
+                    { name: "Dimakatso Tlou", g: "f", late: true },
+                    { name: "S'fiso Tlou", g: "m" },
+                    { name: "Dimpho Tlou", g: "f" },
+                    { name: "Lesego Tlou", g: "m" } ] },
+                { name: "Christina Tlou", g: "f",
+                  children: [
+                    { name: "Tumelo Tlou", g: "m" },
+                    { name: "Mmalithabo Tlou", g: "f" },
+                    { name: "Neo Tlou", g: "m" } ] },
+                { name: "Tshugishi Tlou", g: "m",
+                  children: [ { name: "Ralefa Tlou", g: "m" } ] },
+                { name: "Dikeledi Tlou", g: "f", late: true } ] },
+            { name: "Kwakwari Tlou", g: "m", late: true,
+              spouse: { name: "Married Mabena", g: "f", late: true },
+              children: [
+                { name: "Wellemina Tlou", g: "f" },
+                { name: "Job Tlou", g: "m" },
+                { name: "Johanna Tlou", g: "f" },
+                { name: "Linah Tlou", g: "f" },
+                { name: "Sydney Tlou", g: "m", late: true },
+                { name: "S'phiwe Tlou", g: "f" },
+                { name: "Godfrey Tlou", g: "m" } ] },
+            { name: "Girly Tlou", g: "f",
+              spouse: { name: "Married Mabena", g: "u" } },
+            { name: "Phillip Tlou", g: "m",
+              spouse: { name: "Nomasonto Tlou", g: "f" },
+              children: [
+                { name: "Velephi Tlou", g: "f",
+                  children: [
+                    { name: "Bongi Tlou", g: "f" },
+                    { name: "Ndolly Tlou", g: "f" },
+                    { name: "Smanga Tlou", g: "m" } ] },
+                { name: "Sipho Tlou", g: "m",
+                  spouse: { name: "Betty Tlou", g: "f" },
+                  children: [
+                    { name: "Bongane Tlou", g: "m" },
+                    { name: "Sonto Tlou", g: "f" },
+                    { name: "Seyabonga Tlou", g: "m" },
+                    { name: "Peter Tlou", g: "m" } ] },
+                { name: "Thamsanqa Tlou", g: "m",
+                  children: [
+                    { name: "Thuli Tlou", g: "f" },
+                    { name: "Tshepo Tlou", g: "m" },
+                    { name: "Nokthula Tlou", g: "f" },
+                    { name: "Thandeka Tlou", g: "f" } ] },
+                { name: "Thandi Tlou", g: "f",
+                  children: [
+                    { name: "S'phiwe Tlou", g: "f" },
+                    { name: "Thabiso Tlou", g: "m" },
+                    { name: "Zakhele Tlou", g: "m" } ] },
+                { name: "Sydney Tlou", g: "m",
+                  spouse: { name: "Linah Tlou", g: "f" },
+                  children: [
+                    { name: "Zithobile Tlou", g: "f",
+                      children: [ { name: "Avela Tlou", g: "m" } ] },
+                    { name: "Nokulunga Tlou", g: "f",
+                      children: [ { name: "Karabo Tlou", g: "m" } ] },
+                    { name: "Bheki Tlou", g: "m",
+                      children: [ { name: "Nakhane Tlou", g: "u" } ] },
+                    { name: "Khutso Tlou", g: "m" },
+                    { name: "Nhlakanipho Tlou", g: "m" },
+                    { name: "Bonginkosi Tlou", g: "m" },
+                    { name: "Nhlonipho Tlou", g: "m" },
+                    { name: "Naledi Tlou", g: "f" },
+                    { name: "Vusimusi Tlou", g: "m", late: true } ] } ] },
+            { name: "Rantsu Tlou", g: "m",
+              spouse: { name: "Lekina Tlou", g: "f" },
+              children: [
+                { name: "Musa Tlou", g: "m", late: true },
+                { name: "Peter Tlou", g: "m", late: true },
+                { name: "Phutha Tlou", g: "m", late: true },
+                { name: "Phillip Tlou", g: "m", late: true },
+                { name: "Sipho Tlou", g: "m", late: true },
+                { name: "Victor Tlou", g: "m" } ] },
+            { name: "Morwa Tlou", g: "m",
+              spouse: { name: "Bhenjiwe Tlou", g: "f", late: true },
+              children: [
+                { name: "Cleophus Tlou", g: "m",
+                  children: [
+                    { name: "Celisizwe Tlou", g: "m" },
+                    { name: "Zongiswa Tlou", g: "m" } ] } ] } ] },
+        { name: "Christina Tlou", g: "f", late: true,
+          spouse: { name: "Married Mabena", g: "m", late: true } },
+        { name: "Maria Tlou", g: "f", late: true,
+          spouse: { name: "Married Somo", g: "m", late: true } },
+        { name: "Margritah Tlou", g: "f", late: true,
+          spouse: { name: "Married Mokgane", g: "m", late: true } },
+        { name: "Martinah Tlou", g: "f", late: true,
+          spouse: { name: "Married Motau", g: "m" } },
+        { name: "Tsele Tlou", g: "f", late: true,
+          spouse: { name: "Married Mabena", g: "u" } },
+        { name: "Tebora Tlou", g: "f", late: true },
+        { name: "Mampuru Tlou", g: "m", late: true },
+        { name: "Salom Tlou", g: "f", late: true,
+          spouse: { name: "Married Mabena", g: "u", late: true } } ] },
+    { name: "Segonope Tlou", g: "m", late: true },
+    { name: "Clay Tlou", g: "m", late: true } ]
+};
+
+</script>
+<script>
+(function(){
+  // ---------- build index ----------
+  const people = []; // {id,name,g,late,parent,spouseOf,partner,children,el,gen}
+  function add(o, parent, gen){
+    const p = {id: people.length, name:o.name, g:o.g||'u', late:!!o.late, parent, gen, children:[], blood:true};
+    people.push(p);
+    if (o.spouse){
+      const s = {id: people.length, name:o.spouse.name, g:o.spouse.g||'u', late:!!o.spouse.late, parent:null, gen, children:[], blood:false, partnerOf:p};
+      people.push(s); p.partner = s;
+    }
+    (o.children||[]).forEach(c => p.children.push(add(c, p, gen+1)));
+    return p;
+  }
+  const root = add(window.FAMILY, null, 1);
+  // children of a spouse are the same as their partner's
+  people.forEach(p => { if (!p.blood) p.children = p.partnerOf.children; });
+  const parentsOf = p => { if (!p.blood || !p.parent) return []; const a=[p.parent]; if (p.parent.partner) a.push(p.parent.partner); return a; };
+  const siblingsOf = p => p.blood && p.parent ? p.parent.children.filter(c=>c!==p) : [];
+  const partnerOf = p => p.blood ? p.partner : p.partnerOf;
+  const anchor = p => p.blood ? p : p.partnerOf; // blood relative a spouse attaches to
+
+  // label for duplicate names
+  const nameCount = {}; people.forEach(p => nameCount[p.name]=(nameCount[p.name]||0)+1);
+  function hint(p){
+    if (p.blood && p.parent) return (p.g==='f'?'daughter':p.g==='m'?'son':'child')+' of '+p.parent.name.replace(' Tlou','');
+    if (!p.blood) return 'partner of '+p.partnerOf.name;
+    return 'eldest ancestor';
+  }
+  const label = p => nameCount[p.name]>1 ? `${p.name} (${hint(p)})` : p.name;
+
+  // ---------- render tree ----------
+  const canvas = document.getElementById('canvas');
+  function card(p){
+    const d = document.createElement('div');
+    d.className = `p ${p.g}${p.late?' late':''}`;
+    d.textContent = p.name;
+    d.title = label(p) + (p.late?' (late)':'');
+    d.dataset.id = p.id;
+    p.el = d;
+    return d;
+  }
+  function renderLi(p){
+    const li = document.createElement('li');
+    const c = document.createElement('div'); c.className='couple';
+    c.appendChild(card(p));
+    if (p.partner){ const l=document.createElement('span'); l.className='link'; c.appendChild(l); c.appendChild(card(p.partner)); }
+    li.appendChild(c);
+    p.li = li;
+    if (p.children.length){
+      const t = document.createElement('button'); t.className='tog'; t.textContent='−'; t.title='Show / hide children';
+      t.addEventListener('click', e => { e.stopPropagation(); setCollapsed(p, !li.classList.contains('collapsed')); });
+      c.appendChild(t);
+      const ul = document.createElement('ul');
+      p.children.forEach(ch => ul.appendChild(renderLi(ch)));
+      li.appendChild(ul);
+    }
+    return li;
+  }
+  function setCollapsed(p, v){
+    if (!p.li || !p.children.length) return;
+    p.li.classList.toggle('collapsed', v);
+    const t = p.li.querySelector(':scope > .couple > .tog'); t.textContent = v?'+':'−';
+    let cnt = p.li.querySelector(':scope > .count');
+    if (v){ if(!cnt){cnt=document.createElement('div');cnt.className='count';p.li.appendChild(cnt);} {const n=descendants(p); cnt.textContent = n+(n===1?' descendant':' descendants')+' hidden';} }
+    else if (cnt) cnt.remove();
+  }
+  const descendants = p => p.children.reduce((n,c)=>n+1+descendants(c),0);
+  const ul = document.createElement('ul'); ul.appendChild(renderLi(root)); canvas.appendChild(ul);
+  canvas.addEventListener('click', e => { const el = e.target.closest('.p'); if (el && !moved){ const p=people[+el.dataset.id]; const a=anchor(p); if (a.li && a.li.classList.contains('collapsed')) setCollapsed(a,false); select(p); } });
+
+  // ---------- pan & zoom ----------
+  const vp = document.getElementById('viewport');
+  let s=1, tx=0, ty=0, moved=false;
+  const apply = () => canvas.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
+  function zoomAt(f, cx, cy){ const ns=Math.min(2.5,Math.max(0.12,s*f)); tx = cx-(cx-tx)*ns/s; ty = cy-(cy-ty)*ns/s; s=ns; apply(); }
+  vp.addEventListener('wheel', e => { e.preventDefault(); const r=vp.getBoundingClientRect(); zoomAt(e.deltaY<0?1.12:1/1.12, e.clientX-r.left, e.clientY-r.top); }, {passive:false});
+  const pts = new Map(); let last=null, pinch=null;
+  vp.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); moved=false; last={x:e.clientX,y:e.clientY}; vp.setPointerCapture(e.pointerId); });
+  vp.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if (pts.size===2){
+      const [a,b]=[...pts.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); const r=vp.getBoundingClientRect();
+      if (pinch) zoomAt(d/pinch, (a.x+b.x)/2-r.left, (a.y+b.y)/2-r.top); pinch=d; moved=true; return;
+    }
+    const dx=e.clientX-last.x, dy=e.clientY-last.y;
+    if (Math.abs(dx)+Math.abs(dy)>3){ moved=true; vp.classList.add('drag'); }
+    if (moved){ tx+=dx; ty+=dy; apply(); }
+    last={x:e.clientX,y:e.clientY};
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size<2) pinch=null; vp.classList.remove('drag'); setTimeout(()=>moved=false,0); };
+  vp.addEventListener('pointerup', up); vp.addEventListener('pointercancel', up);
+  function fit(){ s=1; tx=0; ty=0; apply(); const w=canvas.scrollWidth, h=canvas.scrollHeight; s=Math.min(vp.clientWidth/w, vp.clientHeight/h, 1); tx=(vp.clientWidth-w*s)/2; ty=Math.max(0,(vp.clientHeight-h*s)/2); apply(); }
+  function centerOn(p, minScale){
+    // make sure ancestors are expanded
+    for (let a = anchor(p).parent; a; a = a.parent) setCollapsed(a, false);
+    if (minScale && s < minScale) s = minScale;
+    apply();
+    const r = p.el.getBoundingClientRect(), v = vp.getBoundingClientRect();
+    tx += (v.left + v.width/2) - (r.left + r.width/2);
+    const vis = window.innerWidth<=800 ? Math.min(v.height, window.innerHeight*0.54 - v.top) : v.height;
+    ty += (v.top + vis/2) - (r.top + r.height/2);
+    canvas.style.transition='transform .35s ease'; apply(); setTimeout(()=>canvas.style.transition='',380);
+  }
+  document.getElementById('zin').onclick = () => zoomAt(1.25, vp.clientWidth/2, vp.clientHeight/2);
+  document.getElementById('zout').onclick = () => zoomAt(0.8, vp.clientWidth/2, vp.clientHeight/2);
+  document.getElementById('fit').onclick = fit;
+  document.getElementById('expand').onclick = () => { people.forEach(p=>setCollapsed(p,false)); fit(); };
+  document.getElementById('collapse').onclick = () => { people.forEach(p=>{ if(p.blood && p.gen>=2) setCollapsed(p,true); }); fit(); };
+
+  // ---------- relationships ----------
+  const G = (p, f, m, u) => (typeof p==='string'?p:p.g)==='f'?f:(typeof p==='string'?p:p.g)==='m'?m:u;
+  const ord = n => ['','first','second','third','fourth','fifth'][n] || n+'th';
+  const greats = n => n<=0 ? '' : (n===1?'great-':n+'× great-');
+  function ancestry(p){ const a=[]; for(let x=p;x;x=x.parent) a.push(x); return a; }
+  // term for what A is to B, both blood relatives
+  function bloodTerm(A, B, gx){
+    const g = gx || A.g;
+    if (A===B) return {t:'self'};
+    const aa=ancestry(A), bb=ancestry(B);
+    const lca = aa.find(x=>bb.includes(x));
+    const da = aa.indexOf(lca), db = bb.indexOf(lca);
+    let t;
+    if (da===0){ // A is ancestor of B
+      t = db===1 ? G(g,'mother','father','parent') : greats(db-2)+G(g,'grandmother','grandfather','grandparent');
+    } else if (db===0){
+      t = da===1 ? G(g,'daughter','son','child') : greats(da-2)+G(g,'granddaughter','grandson','grandchild');
+    } else if (da===1 && db===1){ t = G(g,'sister','brother','sibling'); }
+    else if (da===1){ t = greats(db-2) + G(g,'aunt','uncle','aunt/uncle'); }
+    else if (db===1){ t = greats(da-2) + G(g,'niece','nephew','niece/nephew'); }
+    else { const deg=Math.min(da,db)-1, rem=Math.abs(da-db); t = ord(deg)+' cousin' + (rem? (rem===1?' once removed':rem===2?' twice removed':' '+rem+' times removed') : ''); }
+    return {t, lca, path: pathBetween(A,B,lca)};
+  }
+  function pathBetween(A,B,lca){
+    const up=[]; for(let x=A;x!==lca;x=x.parent) up.push(x);
+    const dn=[]; for(let x=B;x!==lca;x=x.parent) dn.push(x);
+    return [...up, lca, ...dn.reverse()];
+  }
+  const art = w => /^[aeiou]/i.test(w)?'an':'a';
+  function relationship(A, B){
+    if (A===B) return {text:'That is the same person.', path:[A]};
+    const pa = partnerOf(A);
+    if (pa===B) return {text:`<b>${A.name}</b> is <b>${label(B)}</b>'s <b>${G(A,'wife','husband','spouse')}</b>.`, path:[A,B]};
+    const a = anchor(A), b = anchor(B);
+    const r = bloodTerm(a, b);
+    let path = r.path || [a];
+    if (!A.blood) path = [A, ...path];
+    if (!B.blood) path = [...path, B];
+    const who = x => `<b>${x.name}</b>`;
+    let text;
+    if (A.blood && B.blood) text = `${who(A)} is ${who(B)}'s <b>${r.t}</b>.`;
+    else if (!A.blood && B.blood){
+      if (r.t==='self') text = `${who(A)} is ${who(B)}'s <b>${G(A,'wife','husband','spouse')}</b>.`;
+      else text = `${who(A)} is ${who(B)}'s <b>${bloodTerm(a,b,A.g).t}-in-law</b> — the ${G(A,'wife','husband','partner')} of ${who(a)}, who is ${B.name}'s ${r.t}.`;
+    }
+    else if (A.blood && !B.blood){
+      text = `${who(A)} is the ${r.t==='self'?G(A,'wife','husband','spouse'):r.t} of ${who(b)}, ${who(B)}'s ${G(B,'husband','wife','partner')}.`;
+      if (r.t!=='self') text += ` (So ${A.name} is ${B.name}'s <b>${r.t}-in-law</b>.)`;
+    } else {
+      text = `${who(A)} is married to ${who(a)}, and ${who(B)} is married to ${who(b)}. ${a.name} is ${b.name}'s <b>${r.t}</b>.`;
+    }
+    text = text.replace(/first cousin-in-law/g,'cousin-in-law');
+    return {text, path};
+  }
+
+  // ---------- panel ----------
+  const panel = document.getElementById('panel');
+  let current=null, visited=[], compareWith=null;
+  const chip = p => `<span class="chip ${p.g}${p.late?' late':''}" data-id="${p.id}" title="${label(p)}">${p.name}${p.late?' ✝':''}</span>`;
+  const group = (title, list) => `<h3>${title}</h3>` + (list.length? `<div class="chips">${list.map(chip).join('')}</div>` : `<div class="none">None recorded</div>`);
+  const sorted = [...people].sort((x,y)=>x.name.localeCompare(y.name));
+
+  function welcome(){
+    panel.innerHTML = `<div class="welcome"><h2>Welcome</h2>
+      <p>This is the family of <b>Tsele &amp; Rantsu Tlou</b> and their descendants — <b>${people.length}</b> people across seven generations.</p>
+      <p><b>Click anyone</b> on the tree to see their parents, partner, brothers &amp; sisters and children. Every name in this panel is clickable too, so you can keep walking from relative to relative.</p>
+      <p>Branches with a <b>+</b> are folded — click the person (or the +) to open them, or press <b>Expand all</b>.</p>
+      <p>Use <b>“How are we related?”</b> to find the relationship between any two people.</p>
+      <button class="primary" data-id="${root.id}">Start with Tsele Tlou</button></div>`;
+  }
+  function select(p, fromHistory){
+    if (!fromHistory && current && current!==p) visited.push(current);
+    current = p; panel.classList.remove('min'); panel.scrollTop=0;
+    document.querySelectorAll('.p.sel,.p.path').forEach(e=>e.classList.remove('sel','path'));
+    p.el.classList.add('sel');
+    const a = anchor(p);
+    // lineage up to the eldest ancestor
+    const line = ancestry(a).reverse();
+    const lineage = line.map(x=>`<a data-id="${x.id}">${x.name.replace(' Tlou','')}</a>`).join(' → ') + (p.blood?'':` ⟷ <a data-id="${p.id}">${p.name.replace(' Tlou','')}</a>`);
+    const gc = p.children.flatMap(c=>c.children);
+    const status = [G(p,'Female','Male','Gender not recorded'), p.late?'Late':null, `Generation ${p.gen}`, p.blood?null:'Married into the family'].filter(Boolean).join(' · ');
+    panel.innerHTML = `
+      <div class="nav"><button id="back" ${visited.length?'':'disabled'}>← Back</button><button id="home">Home</button><button id="loc">Show on tree</button></div>
+      <h2>${p.name}${p.late?' ✝':''}</h2>
+      <div class="sub">${status}</div>
+      ${p.blood ? group('Parents', parentsOf(p)) : group('Parents', []) .replace('None recorded','Not on this chart (married in)')}
+      ${group(G(p,'Husband','Wife','Partner'), partnerOf(p)?[partnerOf(p)]:[])}
+      ${p.blood ? group('Brothers &amp; sisters', siblingsOf(p)) : group(G(p,'Brothers &amp; sisters-in-law','Brothers &amp; sisters-in-law','Siblings-in-law'), siblingsOf(a))}
+      ${group('Children', p.children)}
+      ${gc.length? group('Grandchildren', gc):''}
+      <h3>Line of descent</h3><div class="lineage">${lineage}</div>
+      <div class="rel"><b>How are we related?</b>
+        <select id="cmp"><option value="">Choose another person…</option>${sorted.filter(x=>x!==p).map(x=>`<option value="${x.id}" ${compareWith===x?'selected':''}>${label(x)}</option>`).join('')}</select>
+        <div class="answer" id="answer"></div>
+      </div>
+      <div class="crumbs">${visited.length? 'Visited: '+visited.slice(-6).map(h=>`<a data-id="${h.id}">${h.name.replace(' Tlou','')}</a>`).join(' · '):''}</div>`;
+    document.getElementById('back').onclick = () => { const h=visited.pop(); if(h){ select(h,true); centerOn(h); } };
+    document.getElementById('home').onclick = () => { visited=[]; current=null; compareWith=null; document.querySelectorAll('.p.sel,.p.path').forEach(e=>e.classList.remove('sel','path')); welcome(); people.forEach(x=>{ if(x.blood && x.gen>=3) setCollapsed(x,true); else setCollapsed(x,false); }); fit(); try{ window.history.replaceState(null,'',location.pathname+location.search); }catch(e){} };
+    document.getElementById('loc').onclick = () => centerOn(p, 0.8);
+    const cmp = document.getElementById('cmp');
+    cmp.onchange = () => { compareWith = cmp.value===''?null:people[+cmp.value]; showRel(); };
+    if (compareWith===p) compareWith=null;
+    showRel();
+    visited.length>30 && visited.shift();
+    try{ window.history.replaceState(null,'','#'+p.id); }catch(e){}
+  }
+  function showRel(){
+    document.querySelectorAll('.p.path').forEach(e=>e.classList.remove('path'));
+    const out = document.getElementById('answer');
+    if (!compareWith){ out.innerHTML=''; return; }
+    const r = relationship(current, compareWith);
+    const back = relationship(compareWith, current);
+    out.innerHTML = r.text + `<br><span style="color:var(--muted);font-size:.85rem">${back.text}</span>` +
+      `<div class="lineage" style="margin-top:6px">Path: ${r.path.map(x=>`<a data-id="${x.id}">${x.name.replace(' Tlou','')}</a>`).join(' → ')}</div>`;
+    r.path.forEach(x=>x.el.classList.add('path'));
+  }
+  panel.addEventListener('click', e => {
+    if (e.offsetY < 14 && e.target===panel){ panel.classList.toggle('min'); return; }
+    const t = e.target.closest('[data-id]'); if (!t) return;
+    const p = people[+t.dataset.id]; select(p); centerOn(p);
+  });
+
+  // ---------- search ----------
+  const q = document.getElementById('search'), res = document.getElementById('results');
+  let hits=[], act=0;
+  function drawResults(){
+    res.innerHTML = hits.map((p,i)=>`<div class="${i===act?'act':''}" data-id="${p.id}">${p.name}${p.late?' ✝':''} <small>${nameCount[p.name]>1||!p.blood?hint(p):''}</small></div>`).join('');
+    res.style.display = hits.length?'block':'none';
+    res.style.left='10px'; res.style.top='6px';
+  }
+  q.addEventListener('input', () => { const v=q.value.trim().toLowerCase(); hits = v? sorted.filter(p=>p.name.toLowerCase().includes(v)).slice(0,15):[]; act=0; drawResults(); });
+  q.addEventListener('keydown', e => {
+    if (e.key==='ArrowDown'){act=Math.min(act+1,hits.length-1);drawResults();e.preventDefault();}
+    if (e.key==='ArrowUp'){act=Math.max(act-1,0);drawResults();e.preventDefault();}
+    if (e.key==='Enter' && hits[act]) go(hits[act]);
+    if (e.key==='Escape'){hits=[];drawResults();}
+  });
+  res.addEventListener('pointerdown', e => e.stopPropagation());
+  res.addEventListener('click', e => { const t=e.target.closest('[data-id]'); if(t) go(people[+t.dataset.id]); });
+  function go(p){ hits=[]; drawResults(); q.value=''; select(p); centerOn(p, 0.8); p.el.classList.remove('hit'); void p.el.offsetWidth; p.el.classList.add('hit'); }
+
+  // ---------- start ----------
+  welcome();
+  people.forEach(p=>{ if(p.blood && p.gen>=3) setCollapsed(p,true); });
+  requestAnimationFrame(() => {
+    fit();
+    const h = parseInt(location.hash.slice(1),10);
+    if (!isNaN(h) && people[h]) { select(people[h]); centerOn(people[h], 0.8); }
+  });
+})();
+</script>
+</body>
+</html>
